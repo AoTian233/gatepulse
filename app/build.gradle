@@ -21,7 +21,7 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"https://gatepulse-omega.vercel.app/api/device/check\"")
         buildConfigField("String", "RESPONSE_SIGNING_KEY", "\"b2b1fe307bf15758d31c58748fbd9886bb7713c62476e6f51841aaaa3636f9ed\"")
         buildConfigField("boolean", "ENFORCE_SIGNATURE", "true")
-        buildConfigField("boolean", "FAIL_OPEN", "false")
+        buildConfigField("boolean", "FAIL_OPEN", "true")
         buildConfigField("long", "DEFAULT_CACHE_TTL_MS", "900000L")
         buildConfigField("boolean", "ENABLE_LOG", "true")
         buildConfigField("long", "NETWORK_CONNECT_TIMEOUT_MS", "10000L")
