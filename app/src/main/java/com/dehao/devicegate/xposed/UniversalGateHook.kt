@@ -27,7 +27,7 @@ class UniversalGateHook : IXposedHookLoadPackage {
                         return
                     }
 
-                    val allow = DeviceVerifier.shouldAllowNow(app, pkg)
+                    val allow = ModuleBridge.check(app, pkg)
                     if (!allow) {
                         AppLog.i("Blocked package: $pkg, killing process.")
                         Process.killProcess(Process.myPid())
