@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Device Gate Admin</title>
+    <style>
+      :root {
+        --bg: #f4f7fb;
+        --card: #ffffff;
+        --text: #1a2433;
+        --muted: #637085;
+        --primary: #0f62fe;
+        --danger: #d7263d;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: linear-gradient(140deg, #eef4ff, #f7fbff 35%, #edf8f3);
+        color: var(--text);
+      }
+      .wrap { max-width: 1080px; margin: 28px auto; padding: 0 16px; }
+      .card {
+        background: var(--card);
+        border-radius: 14px;
+        box-shadow: 0 10px 26px rgba(26, 36, 51, 0.08);
+        padding: 18px;
+        margin-bottom: 16px;
+      }
+      h1 { margin: 0 0 14px; font-size: 24px; }
+      .row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+      .row-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      @media (max-width: 860px) {
+        .row, .row-2 { grid-template-columns: 1fr; }
+      }
+      input, select, button {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d7deea;
+        border-radius: 8px;
+        font-size: 14px;
+      }
+      button {
+        border: none;
+        background: var(--primary);
+        color: #fff;
+        cursor: pointer;
+      }
+      button.secondary { background: #3f4d61; }
+      button.danger { background: var(--danger); }
+      .muted { color: var(--muted); font-size: 13px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border-bottom: 1px solid #e8edf6; padding: 10px 8px; text-align: left; font-size: 13px; }
+      .tag-true { color: #0c8a48; font-weight: 600; }
+      .tag-false { color: #ba2233; font-weight: 600; }
+      .toolbar { display: flex; gap: 10px; margin-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>Device Gate Admin</h1>
+        <div class="muted">先输入 ADMIN_TOKEN，然后管理 device_token + package_name 的授权规则。</div>
+      </div>
+
+      <div class="card">
+        <div class="row-2">
+          <input id="adminToken" placeholder="ADMIN_TOKEN" />
+          <button onclick="saveToken()">保存 Token</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <input id="deviceToken" placeholder="device_token" />
+          <input id="packageName" placeholder="package_name (如 com.demo.app)" />
+          <input id="expiresAt" placeholder="expires_at 毫秒时间戳，可空" />
+          <select id="allowed">
+            <option value="true">allowed = true</option>
+            <option value="false">allowed = false</option>
+          </select>
+        </div>
+        <div class="row-2" style="margin-top:10px;">
+          <input id="note" placeholder="note (可空)" />
+          <button onclick="upsertRule()">新增/更新规则</button>
+        </div>
+        <div class="toolbar">
+          <button class="secondary" onclick="loadRules()">刷新列表</button>
+          <button class="danger" onclick="deleteRule()">删除当前 device+package</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>device_token</th>
+              <th>package_name</th>
+              <th>allowed</th>
+              <th>expires_at</th>
+              <th>updated_at</th>
+              <th>note</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      const rowsEl = document.getElementById("rows");
+      const tokenEl = document.getElementById("adminToken");
+      tokenEl.value = localStorage.getItem("admin_token") || "";
+
+      function saveToken() {
+        localStorage.setItem("admin_token", tokenEl.value.trim());
+        alert("Token 已保存");
+      }
+
+      function getToken() {
+        const v = tokenEl.value.trim();
+        if (!v) {
+          alert("请先填写 ADMIN_TOKEN");
+          throw new Error("missing token");
+        }
+        return v;
+      }
+
+      async function api(path, options = {}) {
+        const token = getToken();
+        const res = await fetch(path, {
+          ...options,
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-token": token,
+            ...(options.headers || {})
+          }
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || ("HTTP " + res.status));
+        }
+        return data;
+      }
+
+      function collectForm() {
+        const device_token = document.getElementById("deviceToken").value.trim();
+        const package_name = document.getElementById("packageName").value.trim();
+        const allowed = document.getElementById("allowed").value === "true";
+        const note = document.getElementById("note").value.trim();
+        const expiresRaw = document.getElementById("expiresAt").value.trim();
+        const expires_at = expiresRaw === "" ? null : Number(expiresRaw);
+        return { device_token, package_name, allowed, note, expires_at };
+      }
+
+      function renderRows(items) {
+        rowsEl.innerHTML = items.map((it) => `
+          <tr>
+            <td>${escapeHtml(it.device_token || "")}</td>
+            <td>${escapeHtml(it.package_name || "")}</td>
+            <td class="${it.allowed ? "tag-true" : "tag-false"}">${it.allowed}</td>
+            <td>${it.expires_at == null ? "" : it.expires_at}</td>
+            <td>${escapeHtml(it.updated_at || "")}</td>
+            <td>${escapeHtml(it.note || "")}</td>
+          </tr>
+        `).join("");
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll("\"", "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      async function loadRules() {
+        try {
+          const data = await api("/api/admin/rules?limit=200");
+          renderRows(data.items || []);
+        } catch (e) {
+          alert("加载失败: " + e.message);
+        }
+      }
+
+      async function upsertRule() {
+        try {
+          const payload = collectForm();
+          await api("/api/admin/rules", {
+            method: "POST",
+            body: JSON.stringify(payload)
+          });
+          await loadRules();
+          alert("已保存");
+        } catch (e) {
+          alert("保存失败: " + e.message);
+        }
+      }
+
+      async function deleteRule() {
+        try {
+          const payload = collectForm();
+          await api("/api/admin/rules", {
+            method: "DELETE",
+            body: JSON.stringify({
+              device_token: payload.device_token,
+              package_name: payload.package_name
+            })
+          });
+          await loadRules();
+          alert("已删除");
+        } catch (e) {
+          alert("删除失败: " + e.message);
+        }
+      }
+
+      loadRules().catch(() => {});
+    </script>
+  </body>
+  </html>

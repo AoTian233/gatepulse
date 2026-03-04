@@ -1,0 +1,19 @@
+{
+  "name": "device-gate-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.4.0",
+    "@vercel/node": "^5.3.24",
+    "typescript": "^5.9.2",
+    "vercel": "^48.12.1"
+  }
+}
