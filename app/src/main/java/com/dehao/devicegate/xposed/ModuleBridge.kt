@@ -11,7 +11,10 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 object ModuleBridge {
-    private val providerUri: Uri = Uri.parse("content://${BuildConfig.APPLICATION_ID}.checkprovider")
+    // Hardcoded authority — do NOT use BuildConfig.APPLICATION_ID here because in the hooked
+    // process BuildConfig refers to the module's BuildConfig class which may be obfuscated or
+    // unavailable. The authority must match AndroidManifest exactly.
+    private val providerUri: Uri = Uri.parse("content://com.dehao.devicegate.checkprovider")
     private val executor = Executors.newSingleThreadExecutor()
 
     fun check(context: Context, packageName: String): Boolean {
