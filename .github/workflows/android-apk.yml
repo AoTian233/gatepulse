@@ -36,11 +36,30 @@ jobs:
         with:
           gradle-version: "8.7"
 
+      - name: Show Gradle Version
+        run: gradle --version
+
       - name: Build Debug APK
-        run: gradle :app:assembleDebug --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug --stacktrace --info 2>&1 | tee gradle-debug.log
 
       - name: Build Release APK
-        run: gradle :app:assembleRelease --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle :app:assembleRelease --stacktrace --info 2>&1 | tee gradle-release.log
+
+      - name: Upload Gradle Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-logs
+          path: |
+            gradle-debug.log
+            gradle-release.log
+          if-no-files-found: warn
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
