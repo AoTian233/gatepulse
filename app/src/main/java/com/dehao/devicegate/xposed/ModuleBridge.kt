@@ -6,26 +6,23 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
-import com.dehao.devicegate.BuildConfig
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 object ModuleBridge {
-    // Hardcoded authority — do NOT use BuildConfig.APPLICATION_ID here because in the hooked
-    // process BuildConfig refers to the module's BuildConfig class which may be obfuscated or
-    // unavailable. The authority must match AndroidManifest exactly.
-    private val providerUri: Uri = Uri.parse("content://com.dehao.devicegate.checkprovider")
+    private val providerUri: Uri = Uri.parse("content://${HookConstants.PROVIDER_AUTHORITY}")
     private val executor = Executors.newSingleThreadExecutor()
 
     fun check(context: Context, packageName: String): Boolean {
-        // First try: IPC via ContentProvider (runs in module process, has INTERNET)
+        // Try IPC first (provider runs in module process which has INTERNET permission)
         val ipcResult = tryProviderCheck(context, packageName)
         if (ipcResult != null) {
+            toast(context, "IPC ok: allowed=$ipcResult")
             return ipcResult
         }
 
-        // Fallback: direct API call — must run on background thread
-        toast(context, "IPC unavailable, trying direct API...")
+        // Provider not reachable — fall back to direct API on background thread
+        toast(context, "IPC fail, trying direct API...")
         return tryDirectCheckBlocking(context, packageName)
     }
 
@@ -40,25 +37,23 @@ object ModuleBridge {
             val extras = Bundle().apply { putString("package_name", packageName) }
             val result: Bundle? = context.contentResolver.call(providerUri, "check", null, extras)
             if (result == null) {
-                AppLog.e("ModuleBridge: provider returned null for $packageName")
+                AppLog.e("Provider returned null for $packageName")
                 return null
             }
-            val allowed = result.getBoolean("allowed", BuildConfig.FAIL_OPEN)
+            val allowed = result.getBoolean("allowed", HookConstants.FAIL_OPEN)
             val error = result.getString("error")
             val token = result.getString("device_token")
-            if (!error.isNullOrBlank()) AppLog.e("ModuleBridge provider error: $error")
-            if (!token.isNullOrBlank()) AppLog.i("Bridge token for $packageName: $token")
-            toast(context, "IPC ok: allowed=$allowed token=${token?.take(8)}")
+            if (!error.isNullOrBlank()) AppLog.e("Provider error: $error")
+            if (!token.isNullOrBlank()) AppLog.i("Token for $packageName: $token")
             allowed
         } catch (t: Throwable) {
-            AppLog.e("ModuleBridge IPC crashed: ${t.javaClass.simpleName}: ${t.message}")
-            toast(context, "IPC crash: ${t.javaClass.simpleName}: ${t.message?.take(40)}")
+            AppLog.e("Provider IPC crash for $packageName: ${t.javaClass.simpleName}: ${t.message}")
+            toast(context, "IPC err: ${t.javaClass.simpleName}: ${t.message?.take(50)}")
             null
         }
     }
 
     private fun tryDirectCheckBlocking(context: Context, packageName: String): Boolean {
-        // Network must happen on a background thread — submit and block with timeout
         val future = executor.submit<Boolean> {
             try {
                 val cached = CacheManager.read(context, packageName)
@@ -69,24 +64,23 @@ object ModuleBridge {
                 val token = CacheManager.getOrCreateDeviceToken(context)
                 val result = ApiClient.verify(token, packageName)
                 CacheManager.write(context, packageName, result.allowed, result.expiresAtMs)
-                toast(context, "API ok: allowed=${result.allowed} token=${token.take(8)}")
+                toast(context, "API ok: allowed=${result.allowed}")
                 result.allowed
             } catch (e: ApiError.Network) {
-                toast(context, "network error: ${e.message?.take(40)}")
+                toast(context, "net err: ${e.message?.take(50)}")
                 val shortTtl = System.currentTimeMillis() + 30_000L
-                CacheManager.write(context, packageName, BuildConfig.FAIL_OPEN, shortTtl)
-                BuildConfig.FAIL_OPEN
+                CacheManager.write(context, packageName, HookConstants.FAIL_OPEN, shortTtl)
+                HookConstants.FAIL_OPEN
             } catch (t: Throwable) {
-                toast(context, "direct fail: ${t.javaClass.simpleName}: ${t.message?.take(30)}")
-                AppLog.e("ModuleBridge direct failed: ${t.message}")
-                BuildConfig.FAIL_OPEN
+                toast(context, "api err: ${t.javaClass.simpleName}: ${t.message?.take(40)}")
+                HookConstants.FAIL_OPEN
             }
         }
         return try {
             future.get(20, TimeUnit.SECONDS)
         } catch (t: Throwable) {
-            toast(context, "direct timeout: ${t.javaClass.simpleName}")
-            BuildConfig.FAIL_OPEN
+            toast(context, "timeout: ${t.javaClass.simpleName}")
+            HookConstants.FAIL_OPEN
         }
     }
 }

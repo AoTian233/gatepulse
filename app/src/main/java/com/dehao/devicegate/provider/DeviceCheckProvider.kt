@@ -24,33 +24,26 @@ class DeviceCheckProvider : ContentProvider() {
             }
         }
 
-        val allowed = DeviceVerifier.shouldAllowNow(ctx, packageName)
-        val token = CacheManager.getOrCreateDeviceToken(ctx)
-        AppLog.i("Provider check for $packageName result=$allowed")
-        return Bundle().apply {
-            putBoolean("allowed", allowed)
-            putString("device_token", token)
+        return try {
+            val allowed = DeviceVerifier.shouldAllowNow(ctx, packageName)
+            val token = CacheManager.getOrCreateDeviceToken(ctx)
+            AppLog.i("Provider check for $packageName result=$allowed")
+            Bundle().apply {
+                putBoolean("allowed", allowed)
+                putString("device_token", token)
+            }
+        } catch (t: Throwable) {
+            AppLog.e("Provider crash for $packageName: ${t.message}", t)
+            Bundle().apply {
+                putBoolean("allowed", false)
+                putString("error", "provider_crash: ${t.message}")
+            }
         }
     }
 
-    override fun query(
-        uri: Uri,
-        projection: Array<out String>?,
-        selection: String?,
-        selectionArgs: Array<out String>?,
-        sortOrder: String?
-    ): Cursor? = null
-
+    override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor? = null
     override fun getType(uri: Uri): String? = null
-
     override fun insert(uri: Uri, values: ContentValues?): Uri? = null
-
     override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = 0
-
-    override fun update(
-        uri: Uri,
-        values: ContentValues?,
-        selection: String?,
-        selectionArgs: Array<out String>?
-    ): Int = 0
+    override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int = 0
 }

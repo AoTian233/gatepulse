@@ -1,19 +1,18 @@
 package com.dehao.devicegate.xposed
 
 import android.util.Log
-import com.dehao.devicegate.BuildConfig
 
 object AppLog {
     private const val TAG = "DeviceGate"
 
     fun i(message: String) {
-        if (!BuildConfig.ENABLE_LOG) return
+        if (!HookConstants.ENABLE_LOG) return
         Log.i(TAG, message)
         logToXposed("$TAG: $message")
     }
 
     fun e(message: String, t: Throwable? = null) {
-        if (!BuildConfig.ENABLE_LOG) return
+        if (!HookConstants.ENABLE_LOG) return
         Log.e(TAG, message, t)
         logToXposed("$TAG: $message")
         if (t != null) logToXposedThrowable(t)

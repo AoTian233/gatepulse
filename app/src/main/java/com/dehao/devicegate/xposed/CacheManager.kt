@@ -1,7 +1,6 @@
 package com.dehao.devicegate.xposed
 
 import android.content.Context
-import com.dehao.devicegate.BuildConfig
 
 data class CacheRecord(
     val allowed: Boolean,
@@ -22,7 +21,7 @@ object CacheManager {
         val prefs = sp(context)
         if (!prefs.contains(allowedKey) || !prefs.contains(expiresKey)) return null
         return CacheRecord(
-            allowed = prefs.getBoolean(allowedKey, BuildConfig.FAIL_OPEN),
+            allowed = prefs.getBoolean(allowedKey, HookConstants.FAIL_OPEN),
             expiresAtMs = prefs.getLong(expiresKey, 0L)
         )
     }
@@ -36,7 +35,6 @@ object CacheManager {
             .apply()
     }
 
-    /** Removes cached result for a specific package (e.g., for testing). */
     fun clearCache(context: Context, packageName: String) {
         sp(context).edit()
             .remove("${packageName}_allowed")

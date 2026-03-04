@@ -1,13 +1,11 @@
 package com.dehao.devicegate.xposed
 
-import com.dehao.devicegate.BuildConfig
-
 object PackageFilter {
     private val exactBlocked = setOf(
         "android",
         "com.android.systemui",
         "com.google.android.gms",
-        BuildConfig.APPLICATION_ID
+        HookConstants.MODULE_PACKAGE_ID
     )
 
     private val prefixBlocked = listOf(
@@ -15,6 +13,7 @@ object PackageFilter {
         "androidx.",
         "com.qualcomm.",
         "com.miui.",
+        "com.xiaomi.",
         "com.samsung.",
         "com.coloros.",
         "com.oplus.",
