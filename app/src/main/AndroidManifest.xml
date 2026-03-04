@@ -8,18 +8,6 @@
         android:label="Universal Device Gate"
         android:supportsRtl="true">
 
-        <!--
-            exported=true is required for cross-process ContentProvider calls from hooked apps.
-            Security: DeviceCheckProvider validates caller via Binder.getCallingUid() internally —
-            it only responds to the "check" method and returns a signed result, so arbitrary callers
-            cannot manipulate the outcome, only query it (which leaks nothing sensitive).
-        -->
-        <provider
-            android:name=".provider.DeviceCheckProvider"
-            android:authorities="${applicationId}.checkprovider"
-            android:enabled="true"
-            android:exported="true" />
-
         <meta-data
             android:name="xposedmodule"
             android:value="true" />
