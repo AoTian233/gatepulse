@@ -14,14 +14,15 @@ class UniversalGateHook : IXposedHookLoadPackage {
             return
         }
 
+        // Hook Application.onCreate instead of Instrumentation.callApplicationOnCreate.
+        // The Instrumentation method is patched by HyperOS/MIUI and causes crashes when hooked.
+        // Application.onCreate is called immediately after and is stable across all ROM variants.
         XposedHelpers.findAndHookMethod(
-            "android.app.Instrumentation",
-            null,
-            "callApplicationOnCreate",
             Application::class.java,
+            "onCreate",
             object : XC_MethodHook() {
                 override fun beforeHookedMethod(param: MethodHookParam) {
-                    val app = param.args.firstOrNull() as? Application ?: return
+                    val app = param.thisObject as? Application ?: return
                     val pkg = app.packageName
                     if (PackageFilter.shouldSkip(pkg)) {
                         return
