@@ -24,6 +24,8 @@ android {
         buildConfigField("boolean", "FAIL_OPEN", "false")
         buildConfigField("long", "DEFAULT_CACHE_TTL_MS", "900000L")
         buildConfigField("boolean", "ENABLE_LOG", "true")
+        buildConfigField("long", "NETWORK_CONNECT_TIMEOUT_MS", "10000L")
+        buildConfigField("long", "NETWORK_READ_TIMEOUT_MS", "15000L")
     }
 
     buildTypes {

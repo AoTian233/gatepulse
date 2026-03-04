@@ -11,54 +11,60 @@ object DeviceVerifier {
     private val refreshingByPackage = ConcurrentHashMap<String, AtomicBoolean>()
     private val tokenLoggedByPackage = ConcurrentHashMap<String, AtomicBoolean>()
 
+    /**
+     * Decision matrix:
+     * - No cache              → synchronous verify (first-seen)
+     * - Cache denied          → synchronous re-verify (so admin approval takes effect on next launch)
+     * - Cache allowed+valid   → return true, async refresh if near expiry
+     * - Cache allowed+expired → return stale true, async refresh (avoid blocking)
+     */
     fun shouldAllowNow(context: Context, packageName: String): Boolean {
         val now = System.currentTimeMillis()
         val cached = CacheManager.read(context, packageName)
         val appContext = context.applicationContext
 
-        if (cached == null) {
-            return verifySynchronouslyOnFirstSeen(appContext, packageName)
+        // No cache or denied: always re-verify synchronously so approval is instant.
+        if (cached == null || !cached.allowed) {
+            return verifySynchronously(appContext, packageName)
         }
 
-        // Deny cache should be revalidated immediately so admin approval takes effect on next launch.
-        if (!cached.allowed) {
-            return verifySynchronouslyOnFirstSeen(appContext, packageName)
+        // Allowed cache: serve it, and background-refresh if expired.
+        if (cached.isExpired(now)) {
+            refreshAsync(appContext, packageName)
         }
-
-        val allowNow = when {
-            cached.isExpired(now) -> cached.allowed
-            else -> cached.allowed
-        }
-
-        refreshIfNeededAsync(appContext, packageName, cached, now)
-        return allowNow
+        return true
     }
 
-    private fun verifySynchronouslyOnFirstSeen(context: Context, packageName: String): Boolean {
+    private fun verifySynchronously(context: Context, packageName: String): Boolean {
         return try {
             val token = CacheManager.getOrCreateDeviceToken(context)
             logTokenOnce(packageName, token)
             val result = ApiClient.verify(token, packageName)
             CacheManager.write(context, packageName, result.allowed, result.expiresAtMs)
-            AppLog.i("First verify for $packageName: allowed=${result.allowed}")
+            AppLog.i("Verified $packageName: allowed=${result.allowed}")
             result.allowed
+        } catch (e: ApiError.Network) {
+            // Transient network error — fail open so a cold-start timeout does NOT permanently block.
+            // Cache with very short TTL so we retry quickly.
+            AppLog.e("Network error for $packageName (transient): ${e.message}")
+            val shortTtl = System.currentTimeMillis() + 30_000L // retry in 30 s
+            CacheManager.write(context, packageName, BuildConfig.FAIL_OPEN, shortTtl)
+            BuildConfig.FAIL_OPEN
+        } catch (e: ApiError.InvalidSignature) {
+            // Possible tampering or key mismatch — hard deny regardless of FAIL_OPEN.
+            AppLog.e("Signature error for $packageName: ${e.message}")
+            val ttl = System.currentTimeMillis() + BuildConfig.DEFAULT_CACHE_TTL_MS
+            CacheManager.write(context, packageName, false, ttl)
+            false
         } catch (t: Throwable) {
-            AppLog.e("First verify failed for $packageName", t)
-            val fallbackExpires = System.currentTimeMillis() + BuildConfig.DEFAULT_CACHE_TTL_MS
-            CacheManager.write(context, packageName, BuildConfig.FAIL_OPEN, fallbackExpires)
+            AppLog.e("Verify failed for $packageName", t)
+            val ttl = System.currentTimeMillis() + BuildConfig.DEFAULT_CACHE_TTL_MS
+            CacheManager.write(context, packageName, BuildConfig.FAIL_OPEN, ttl)
             BuildConfig.FAIL_OPEN
         }
     }
 
-    private fun refreshIfNeededAsync(
-        context: Context,
-        packageName: String,
-        cached: CacheRecord?,
-        nowMs: Long
-    ) {
-        val needsRefresh = cached == null || cached.isExpired(nowMs)
-        if (!needsRefresh) return
-
+    private fun refreshAsync(context: Context, packageName: String) {
         val state = refreshingByPackage.getOrPut(packageName) { AtomicBoolean(false) }
         if (!state.compareAndSet(false, true)) return
 
@@ -68,13 +74,9 @@ object DeviceVerifier {
                 logTokenOnce(packageName, token)
                 val result = ApiClient.verify(token, packageName)
                 CacheManager.write(context, packageName, result.allowed, result.expiresAtMs)
-                AppLog.i("Refreshed cache for $packageName: allowed=${result.allowed}")
+                AppLog.i("Async refresh for $packageName: allowed=${result.allowed}")
             } catch (t: Throwable) {
-                AppLog.e("Refresh failed for $packageName", t)
-                if (cached == null) {
-                    val fallbackExpires = System.currentTimeMillis() + BuildConfig.DEFAULT_CACHE_TTL_MS
-                    CacheManager.write(context, packageName, BuildConfig.FAIL_OPEN, fallbackExpires)
-                }
+                AppLog.e("Async refresh failed for $packageName", t)
             } finally {
                 state.set(false)
             }

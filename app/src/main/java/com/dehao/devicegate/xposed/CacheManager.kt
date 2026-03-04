@@ -36,6 +36,14 @@ object CacheManager {
             .apply()
     }
 
+    /** Removes cached result for a specific package (e.g., for testing). */
+    fun clearCache(context: Context, packageName: String) {
+        sp(context).edit()
+            .remove("${packageName}_allowed")
+            .remove("${packageName}_expires_at")
+            .apply()
+    }
+
     fun getOrCreateDeviceToken(context: Context): String {
         val prefs = sp(context)
         val current = prefs.getString(KEY_DEVICE_TOKEN, null)
