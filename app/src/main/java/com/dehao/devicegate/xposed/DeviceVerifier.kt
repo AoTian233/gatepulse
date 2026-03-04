@@ -20,6 +20,11 @@ object DeviceVerifier {
             return verifySynchronouslyOnFirstSeen(appContext, packageName)
         }
 
+        // Deny cache should be revalidated immediately so admin approval takes effect on next launch.
+        if (!cached.allowed) {
+            return verifySynchronouslyOnFirstSeen(appContext, packageName)
+        }
+
         val allowNow = when {
             cached.isExpired(now) -> cached.allowed
             else -> cached.allowed
