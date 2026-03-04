@@ -7,6 +7,10 @@ android {
     namespace = "com.dehao.devicegate"
     compileSdk = 35
 
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId = "com.dehao.devicegate"
         minSdk = 24
